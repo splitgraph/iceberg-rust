@@ -504,6 +504,16 @@
 <a href="#504" id="504">504</a>
 <a href="#505" id="505">505</a>
 <a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
 </pre></div><pre class="rust"><code><span class="comment">// Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -849,6 +859,16 @@
         writer.write(bs).<span class="kw">await</span><span class="question-mark">?</span>;
         writer.close().<span class="kw">await
     </span>}
+
+    <span class="doccomment">/// Create a new output file with given bytes.
+    /// Error out if the file already exists
+    </span><span class="kw">pub async fn </span>write_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>, bs: Bytes) -&gt; <span class="kw">crate</span>::Result&lt;()&gt; {
+        <span class="self">self</span>.op
+            .write_with(<span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="self">self</span>.relative_path_pos..], bs)
+            .if_none_match(<span class="string">"*"</span>)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
 
     <span class="doccomment">/// Creates output file for continues writing.
     ///
