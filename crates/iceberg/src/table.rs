@@ -265,14 +265,7 @@ impl StaticTable {
         let metadata_file = file_io.new_input(metadata_file_path)?;
         let metadata_file_content = metadata_file.read().await?;
         let table_metadata = serde_json::from_slice::<TableMetadata>(&metadata_file_content)?;
-        let table = Table::builder()
-            .metadata(table_metadata)
-            .metadata_location(metadata_file_path)
-            .identifier(table_ident)
-            .file_io(file_io.clone())
-            .readonly(true)
-            .build()?;
-        Ok(Self(table))
+        Self::from_metadata(table_metadata, table_ident, file_io).await
     }
 
     /// Create a TableScanBuilder for the static table.
