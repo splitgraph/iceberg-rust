@@ -1879,6 +1879,12 @@
 <a href="#1879" id="1879">1879</a>
 <a href="#1880" id="1880">1880</a>
 <a href="#1881" id="1881">1881</a>
+<a href="#1882" id="1882">1882</a>
+<a href="#1883" id="1883">1883</a>
+<a href="#1884" id="1884">1884</a>
+<a href="#1885" id="1885">1885</a>
+<a href="#1886" id="1886">1886</a>
+<a href="#1887" id="1887">1887</a>
 </pre></div><pre class="rust"><code><span class="comment">// Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -2302,8 +2308,11 @@
             arrow_reader_builder = arrow_reader_builder.with_batch_size(batch_size);
         }
 
-        arrow_reader_builder.build().read(<span class="self">self</span>.plan_files().<span class="kw">await</span><span class="question-mark">?</span>)
-    }
+        arrow_reader_builder
+            .build()
+            .read(<span class="self">self</span>.plan_files().<span class="kw">await</span><span class="question-mark">?</span>)
+            .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Returns a reference to the column names of the table scan.
     </span><span class="kw">pub fn </span>column_names(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[String]&gt; {
@@ -2839,7 +2848,7 @@
 }
 
 <span class="attr">#[cfg(test)]
-</span><span class="kw">mod </span>tests {
+</span><span class="kw">pub mod </span>tests {
     <span class="kw">use </span>std::collections::HashMap;
     <span class="kw">use </span>std::fs;
     <span class="kw">use </span>std::fs::File;
@@ -2868,13 +2877,14 @@
     <span class="kw">use </span><span class="kw">crate</span>::table::Table;
     <span class="kw">use </span><span class="kw">crate</span>::TableIdent;
 
-    <span class="kw">struct </span>TableTestFixture {
+    <span class="kw">pub struct </span>TableTestFixture {
         table_location: String,
-        table: Table,
+        <span class="kw">pub </span>table: Table,
     }
 
     <span class="kw">impl </span>TableTestFixture {
-        <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
+        <span class="attr">#[allow(clippy::new_without_default)]
+        </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
             <span class="kw">let </span>tmp_dir = TempDir::new().unwrap();
             <span class="kw">let </span>table_location = tmp_dir.path().join(<span class="string">"table1"</span>);
             <span class="kw">let </span>manifest_list1_location = table_location.join(<span class="string">"metadata/manifests_list_1.avro"</span>);
@@ -2927,7 +2937,7 @@
                 .unwrap()
         }
 
-        <span class="kw">async fn </span>setup_manifest_files(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">pub async fn </span>setup_manifest_files(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
             <span class="kw">let </span>current_snapshot = <span class="self">self</span>.table.metadata().current_snapshot().unwrap();
             <span class="kw">let </span>parent_snapshot = current_snapshot
                 .parent_snapshot(<span class="self">self</span>.table.metadata())
@@ -3291,13 +3301,15 @@
         <span class="kw">let </span>batch_stream = reader
             .clone()
             .read(Box::pin(stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>(plan_task.remove(<span class="number">0</span>))])))
-            .unwrap();
+            .<span class="kw">await
+            </span>.unwrap();
         <span class="kw">let </span>batche1: Vec&lt;<span class="kw">_</span>&gt; = batch_stream.try_collect().<span class="kw">await</span>.unwrap();
 
         <span class="kw">let </span>reader = ArrowReaderBuilder::new(fixture.table.file_io().clone()).build();
         <span class="kw">let </span>batch_stream = reader
             .read(Box::pin(stream::iter(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>(plan_task.remove(<span class="number">0</span>))])))
-            .unwrap();
+            .<span class="kw">await
+            </span>.unwrap();
         <span class="kw">let </span>batche2: Vec&lt;<span class="kw">_</span>&gt; = batch_stream.try_collect().<span class="kw">await</span>.unwrap();
 
         <span class="macro">assert_eq!</span>(batche1, batche2);
