@@ -375,6 +375,11 @@ impl OutputFile {
             self.op.writer(&self.path[self.relative_path_pos..]).await?,
         ))
     }
+
+    /// Underlying operator
+    pub fn operator(&self) -> &Operator {
+        &self.op
+    }
 }
 
 #[cfg(test)]
