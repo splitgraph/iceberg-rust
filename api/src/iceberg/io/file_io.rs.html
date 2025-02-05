@@ -535,6 +535,16 @@
 <a href="#535" id="535">535</a>
 <a href="#536" id="536">536</a>
 <a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
 </pre></div><pre class="rust"><code><span class="comment">// Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -828,6 +838,11 @@
     </span><span class="kw">pub async fn </span>reader(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::Result&lt;<span class="kw">impl </span>FileRead&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.op.reader(<span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="self">self</span>.relative_path_pos..]).<span class="kw">await</span><span class="question-mark">?</span>)
     }
+
+    <span class="doccomment">/// Underlying operator
+    </span><span class="kw">pub fn </span>operator(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Operator {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.op
+    }
 }
 
 <span class="doccomment">/// Trait for writing file.
@@ -921,6 +936,11 @@
         <span class="prelude-val">Ok</span>(Box::new(
             <span class="self">self</span>.op.writer(<span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="self">self</span>.relative_path_pos..]).<span class="kw">await</span><span class="question-mark">?</span>,
         ))
+    }
+
+    <span class="doccomment">/// Underlying operator
+    </span><span class="kw">pub fn </span>operator(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Operator {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.op
     }
 }
 
