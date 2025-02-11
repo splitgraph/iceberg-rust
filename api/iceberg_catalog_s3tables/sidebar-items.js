@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["S3TablesCatalog","S3TablesCatalogConfig"]};
+window.SIDEBAR_ITEMS = {};
