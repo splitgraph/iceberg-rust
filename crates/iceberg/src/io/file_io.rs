@@ -255,19 +255,24 @@ pub struct InputFile {
 }
 
 impl InputFile {
-    /// Absolute path to root uri.
+    /// Absolute path
     pub fn location(&self) -> &str {
         &self.path
     }
 
+    /// Relative path
+    pub fn relative_path(&self) -> &str {
+        &self.path[self.relative_path_pos..]
+    }
+
     /// Check if file exists.
     pub async fn exists(&self) -> crate::Result<bool> {
-        Ok(self.op.exists(&self.path[self.relative_path_pos..]).await?)
+        Ok(self.op.exists(self.relative_path()).await?)
     }
 
     /// Fetch and returns metadata of file.
     pub async fn metadata(&self) -> crate::Result<FileMetadata> {
-        let meta = self.op.stat(&self.path[self.relative_path_pos..]).await?;
+        let meta = self.op.stat(self.relative_path()).await?;
 
         Ok(FileMetadata {
             size: meta.content_length(),
@@ -278,18 +283,14 @@ impl InputFile {
     ///
     /// For continues reading, use [`Self::reader`] instead.
     pub async fn read(&self) -> crate::Result<Bytes> {
-        Ok(self
-            .op
-            .read(&self.path[self.relative_path_pos..])
-            .await?
-            .to_bytes())
+        Ok(self.op.read(self.relative_path()).await?.to_bytes())
     }
 
     /// Creates [`FileRead`] for continues reading.
     ///
     /// For one-time reading, use [`Self::read`] instead.
     pub async fn reader(&self) -> crate::Result<impl FileRead> {
-        Ok(self.op.reader(&self.path[self.relative_path_pos..]).await?)
+        Ok(self.op.reader(self.relative_path()).await?)
     }
 
     /// Underlying operator
@@ -339,14 +340,19 @@ pub struct OutputFile {
 }
 
 impl OutputFile {
-    /// Relative path to root uri.
+    /// Absolute path
     pub fn location(&self) -> &str {
         &self.path
     }
 
+    /// Relative path
+    pub fn relative_path(&self) -> &str {
+        &self.path[self.relative_path_pos..]
+    }
+
     /// Checks if file exists.
     pub async fn exists(&self) -> crate::Result<bool> {
-        Ok(self.op.exists(&self.path[self.relative_path_pos..]).await?)
+        Ok(self.op.exists(self.relative_path()).await?)
     }
 
     /// Converts into [`InputFile`].
@@ -370,25 +376,13 @@ impl OutputFile {
         writer.close().await
     }
 
-    /// Create a new output file with given bytes.
-    /// Error out if the file already exists
-    pub async fn write_exclusive(&self, bs: Bytes) -> crate::Result<()> {
-        self.op
-            .write_with(&self.path[self.relative_path_pos..], bs)
-            .if_not_exists(true)
-            .await?;
-        Ok(())
-    }
-
     /// Creates output file for continues writing.
     ///
     /// # Notes
     ///
     /// For one-time writing, use [`Self::write`] instead.
     pub async fn writer(&self) -> crate::Result<Box<dyn FileWrite>> {
-        Ok(Box::new(
-            self.op.writer(&self.path[self.relative_path_pos..]).await?,
-        ))
+        Ok(Box::new(self.op.writer(self.relative_path()).await?))
     }
 
     /// Underlying operator
