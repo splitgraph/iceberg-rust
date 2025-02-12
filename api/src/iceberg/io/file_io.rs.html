@@ -539,12 +539,6 @@
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
 <a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a>
-<a href="#543" id="543">543</a>
-<a href="#544" id="544">544</a>
-<a href="#545" id="545">545</a>
-<a href="#546" id="546">546</a>
-<a href="#547" id="547">547</a>
 </pre></div><pre class="rust"><code><span class="comment">// Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -802,19 +796,24 @@
 }
 
 <span class="kw">impl </span>InputFile {
-    <span class="doccomment">/// Absolute path to root uri.
+    <span class="doccomment">/// Absolute path
     </span><span class="kw">pub fn </span>location(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
         <span class="kw-2">&amp;</span><span class="self">self</span>.path
     }
 
+    <span class="doccomment">/// Relative path
+    </span><span class="kw">pub fn </span>relative_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="self">self</span>.relative_path_pos..]
+    }
+
     <span class="doccomment">/// Check if file exists.
     </span><span class="kw">pub async fn </span>exists(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::Result&lt;bool&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.op.exists(<span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="self">self</span>.relative_path_pos..]).<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.op.exists(<span class="self">self</span>.relative_path()).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="doccomment">/// Fetch and returns metadata of file.
     </span><span class="kw">pub async fn </span>metadata(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::Result&lt;FileMetadata&gt; {
-        <span class="kw">let </span>meta = <span class="self">self</span>.op.stat(<span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="self">self</span>.relative_path_pos..]).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>meta = <span class="self">self</span>.op.stat(<span class="self">self</span>.relative_path()).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(FileMetadata {
             size: meta.content_length(),
@@ -825,18 +824,14 @@
     ///
     /// For continues reading, use [`Self::reader`] instead.
     </span><span class="kw">pub async fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::Result&lt;Bytes&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.op
-            .read(<span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="self">self</span>.relative_path_pos..])
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.to_bytes())
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.op.read(<span class="self">self</span>.relative_path()).<span class="kw">await</span><span class="question-mark">?</span>.to_bytes())
     }
 
     <span class="doccomment">/// Creates [`FileRead`] for continues reading.
     ///
     /// For one-time reading, use [`Self::read`] instead.
     </span><span class="kw">pub async fn </span>reader(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::Result&lt;<span class="kw">impl </span>FileRead&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.op.reader(<span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="self">self</span>.relative_path_pos..]).<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.op.reader(<span class="self">self</span>.relative_path()).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="doccomment">/// Underlying operator
@@ -886,14 +881,19 @@
 }
 
 <span class="kw">impl </span>OutputFile {
-    <span class="doccomment">/// Relative path to root uri.
+    <span class="doccomment">/// Absolute path
     </span><span class="kw">pub fn </span>location(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
         <span class="kw-2">&amp;</span><span class="self">self</span>.path
     }
 
+    <span class="doccomment">/// Relative path
+    </span><span class="kw">pub fn </span>relative_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="self">self</span>.relative_path_pos..]
+    }
+
     <span class="doccomment">/// Checks if file exists.
     </span><span class="kw">pub async fn </span>exists(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::Result&lt;bool&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.op.exists(<span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="self">self</span>.relative_path_pos..]).<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.op.exists(<span class="self">self</span>.relative_path()).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="doccomment">/// Converts into [`InputFile`].
@@ -917,25 +917,13 @@
         writer.close().<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Create a new output file with given bytes.
-    /// Error out if the file already exists
-    </span><span class="kw">pub async fn </span>write_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>, bs: Bytes) -&gt; <span class="kw">crate</span>::Result&lt;()&gt; {
-        <span class="self">self</span>.op
-            .write_with(<span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="self">self</span>.relative_path_pos..], bs)
-            .if_not_exists(<span class="bool-val">true</span>)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(())
-    }
-
     <span class="doccomment">/// Creates output file for continues writing.
     ///
     /// # Notes
     ///
     /// For one-time writing, use [`Self::write`] instead.
     </span><span class="kw">pub async fn </span>writer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::Result&lt;Box&lt;<span class="kw">dyn </span>FileWrite&gt;&gt; {
-        <span class="prelude-val">Ok</span>(Box::new(
-            <span class="self">self</span>.op.writer(<span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="self">self</span>.relative_path_pos..]).<span class="kw">await</span><span class="question-mark">?</span>,
-        ))
+        <span class="prelude-val">Ok</span>(Box::new(<span class="self">self</span>.op.writer(<span class="self">self</span>.relative_path()).<span class="kw">await</span><span class="question-mark">?</span>))
     }
 
     <span class="doccomment">/// Underlying operator
