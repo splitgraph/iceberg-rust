@@ -42,7 +42,7 @@ impl Display for Bucket<'_> {
             Bucket::S3(s) => write!(f, "s3://{s}"),
             Bucket::GCS(s) => write!(f, "gs://{s}"),
             Bucket::Azure { account, container } => {
-                write!(f, "abfss://{container}@{account}.dfs.core.windows.net")
+                write!(f, "az://{container}")
             }
             Bucket::Local => write!(f, ""),
         }
@@ -129,6 +129,8 @@ impl Bucket<'_> {
                 .ok_or(Error::NotFound(format!("Account in path {path}")))?;
             let container = remainder.split('/').nth(1).unwrap_or("");
             Ok(Bucket::Azure { account, container })
+        }else if path.starts_with("http://") {
+            todo!("### http protocol is not supported for object stores")
         } else {
             Ok(Bucket::Local)
         }
