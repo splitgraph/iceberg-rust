@@ -386,8 +386,12 @@ impl<'schema, 'metadata> ManifestWriter<'schema, 'metadata> {
         manifest.existing_files_count = Some(
             manifest.existing_files_count.unwrap_or(0) + manifest.added_files_count.unwrap_or(0),
         );
+        manifest.existing_rows_count = Some(
+            manifest.existing_rows_count.unwrap_or(0) + manifest.added_rows_count.unwrap_or(0),
+        );
 
         manifest.added_files_count = None;
+        manifest.added_rows_count = None;
 
         Ok(ManifestWriter {
             manifest,
@@ -525,10 +529,16 @@ impl<'schema, 'metadata> ManifestWriter<'schema, 'metadata> {
         manifest.sequence_number = table_metadata.last_sequence_number + 1;
 
         manifest.existing_files_count = Some(
-            manifest.existing_files_count.unwrap_or(0) + manifest.added_files_count.unwrap_or(0),
+            manifest.existing_files_count.unwrap_or(0) + manifest.added_files_count.unwrap_or(0)
+                - filtered_stats.removed_data_files,
+        );
+        manifest.existing_rows_count = Some(
+            manifest.existing_rows_count.unwrap_or(0) + manifest.added_rows_count.unwrap_or(0)
+                - filtered_stats.removed_records,
         );
 
         manifest.added_files_count = None;
+        manifest.added_rows_count = None;
 
         Ok((
             ManifestWriter {
