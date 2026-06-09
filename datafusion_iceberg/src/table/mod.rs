@@ -31,7 +31,6 @@ use object_store::ObjectStoreExt;
 use std::collections::BTreeMap;
 use std::thread::available_parallelism;
 use std::{
-    any::Any,
     collections::{HashMap, HashSet},
     fmt,
     ops::Deref,
@@ -277,9 +276,6 @@ impl DataFusionTable {
 
 #[async_trait]
 impl TableProvider for DataFusionTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     fn schema(&self) -> SchemaRef {
         self.schema.clone()
     }
@@ -1039,9 +1035,6 @@ impl DisplayAs for IcebergDataSink {
 
 #[async_trait]
 impl DataSink for IcebergDataSink {
-    fn as_any(&self) -> &dyn Any {
-        self.0.as_any()
-    }
     async fn write_all(
         &self,
         data: SendableRecordBatchStream,
@@ -1127,9 +1120,10 @@ fn generate_partitioned_file(
         partition_values,
         range: None,
         statistics: Some(Arc::new(manifest_statistics)),
-        extensions: None,
+        extensions: Default::default(),
         metadata_size_hint: None,
         ordering: None,
+        table_reference: None,
     };
     Ok(file)
 }

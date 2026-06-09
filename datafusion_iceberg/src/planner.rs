@@ -162,7 +162,7 @@ async fn plan_create_table(
         .ok_or(DataFusionError::Plan(format!(
             "Catalog {catalog_name} does not exist."
         )))?;
-    let Some(iceberg_catalog) = datafusion_catalog.as_any().downcast_ref::<IcebergCatalog>() else {
+    let Some(iceberg_catalog) = datafusion_catalog.downcast_ref::<IcebergCatalog>() else {
         return Err(DataFusionError::Plan(format!(
             "Catalog {catalog_name} is not an Iceberg catalog."
         )));
@@ -238,7 +238,7 @@ async fn plan_create_view(
         .ok_or(DataFusionError::Plan(format!(
             "Catalog {catalog_name} does not exist."
         )))?;
-    let Some(iceberg_catalog) = datafusion_catalog.as_any().downcast_ref::<IcebergCatalog>() else {
+    let Some(iceberg_catalog) = datafusion_catalog.downcast_ref::<IcebergCatalog>() else {
         return Err(DataFusionError::Plan(format!(
             "Catalog {catalog_name} is not an Iceberg catalog."
         )));
@@ -365,7 +365,7 @@ async fn plan_create_namespace(
         .ok_or(DataFusionError::Plan(format!(
             "Catalog {catalog_name} does not exist."
         )))?;
-    let Some(iceberg_catalog) = datafusion_catalog.as_any().downcast_ref::<IcebergCatalog>() else {
+    let Some(iceberg_catalog) = datafusion_catalog.downcast_ref::<IcebergCatalog>() else {
         return Err(DataFusionError::Plan(format!(
             "Catalog {catalog_name} is not an Iceberg catalog."
         )));
@@ -408,7 +408,7 @@ async fn plan_drop_table(
         .ok_or(DataFusionError::Plan(format!(
             "Catalog {catalog_name} does not exist."
         )))?;
-    let Some(iceberg_catalog) = datafusion_catalog.as_any().downcast_ref::<IcebergCatalog>() else {
+    let Some(iceberg_catalog) = datafusion_catalog.downcast_ref::<IcebergCatalog>() else {
         return Err(DataFusionError::Plan(format!(
             "Catalog {catalog_name} is not an Iceberg catalog."
         )));
@@ -444,7 +444,7 @@ async fn plan_drop_namespace(
         .ok_or(DataFusionError::Plan(format!(
             "Catalog {catalog_name} does not exist."
         )))?;
-    let Some(iceberg_catalog) = datafusion_catalog.as_any().downcast_ref::<IcebergCatalog>() else {
+    let Some(iceberg_catalog) = datafusion_catalog.downcast_ref::<IcebergCatalog>() else {
         return Err(DataFusionError::Plan(format!(
             "Catalog {catalog_name} is not an Iceberg catalog."
         )));
@@ -824,10 +824,6 @@ impl Hash for RefreshMaterializedView {
 }
 
 impl ScalarUDFImpl for RefreshMaterializedView {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> &str {
         "refresh_materialized_view"
     }

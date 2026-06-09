@@ -1,4 +1,4 @@
-use std::{any::Any, ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 
 use datafusion::{catalog::SchemaProvider, datasource::TableProvider, error::Result};
 use iceberg_rust::catalog::{identifier::Identifier, namespace::Namespace};
@@ -19,9 +19,6 @@ impl IcebergSchema {
 
 #[async_trait::async_trait]
 impl SchemaProvider for IcebergSchema {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     fn table_names(&self) -> Vec<String> {
         let tables = self.catalog.table_names(&self.schema);
         match tables {
