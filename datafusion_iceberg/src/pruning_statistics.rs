@@ -132,13 +132,13 @@ impl PruningStatistics for PruneManifests<'_, '_> {
     }
 
     fn row_counts(&self) -> Option<ArrayRef> {
-        ScalarValue::iter_to_array(
-            self.files
-                .iter()
-                .map(|x| x.added_rows_count)
-                .map(ScalarValue::Int64),
-        )
-        .ok()
+        let row_counts = self.files.iter().map(|x| {
+            match (x.added_rows_count, x.existing_rows_count, x.deleted_rows_count) {
+                (Some(a), Some(e), Some(d)) => Some(a + e - d),
+                _ => None,
+            }
+        });
+        ScalarValue::iter_to_array(row_counts.map(ScalarValue::Int64)).ok()
     }
 }
 
