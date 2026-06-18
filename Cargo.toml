@@ -23,13 +23,13 @@ chrono = { version = "0.4", default-features = false, features = [
     "serde",
     "clock",
 ] }
-datafusion = "53"
-datafusion-common = "53"
-datafusion-execution = "53"
-datafusion-expr = "53"
-datafusion-functions = { version = "53", features = ["crypto_expressions"] }
-datafusion-functions-aggregate = "53"
-datafusion-sql = "53"
+datafusion = "54"
+datafusion-common = "54"
+datafusion-execution = "54"
+datafusion-expr = "54"
+datafusion-functions = { version = "54", features = ["crypto_expressions"] }
+datafusion-functions-aggregate = "54"
+datafusion-sql = "54"
 derive-getters = "0.5.0"
 derive_builder = "0.20"
 futures = "0.3.31"

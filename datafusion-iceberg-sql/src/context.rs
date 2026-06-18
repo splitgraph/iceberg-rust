@@ -4,7 +4,8 @@ use arrow_schema::DataType;
 use datafusion_common::{config::ConfigOptions, DataFusionError, TableReference};
 use datafusion_execution::FunctionRegistry;
 use datafusion_expr::{
-    registry::MemoryFunctionRegistry, AggregateUDF, ScalarUDF, TableSource, WindowUDF,
+    registry::MemoryFunctionRegistry, AggregateUDF, HigherOrderUDF, ScalarUDF, TableSource,
+    WindowUDF,
 };
 use datafusion_sql::planner::ContextProvider;
 use iceberg_rust::catalog::{identifier::Identifier, CatalogList};
@@ -100,6 +101,9 @@ impl ContextProvider for IcebergContext {
     fn get_window_meta(&self, name: &str) -> Option<Arc<WindowUDF>> {
         self.function_registry.udwf(name).ok()
     }
+    fn get_higher_order_meta(&self, _name: &str) -> Option<Arc<HigherOrderUDF>> {
+        None
+    }
     fn options(&self) -> &ConfigOptions {
         &self.config_options
     }
@@ -113,6 +117,10 @@ impl ContextProvider for IcebergContext {
     }
 
     fn udwf_names(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn higher_order_function_names(&self) -> Vec<String> {
         Vec::new()
     }
 }

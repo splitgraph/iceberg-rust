@@ -1,4 +1,4 @@
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
 
 use datafusion::{
     catalog::{CatalogProvider, SchemaProvider},
@@ -36,9 +36,6 @@ impl IcebergCatalog {
 }
 
 impl CatalogProvider for IcebergCatalog {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     fn schema_names(&self) -> Vec<String> {
         let namespaces = self.catalog.schema_names(None);
         match namespaces {

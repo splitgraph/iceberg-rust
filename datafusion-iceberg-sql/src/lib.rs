@@ -1,4 +1,4 @@
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
 
 use arrow_schema::SchemaRef;
 use datafusion_expr::TableSource;
@@ -22,9 +22,6 @@ impl IcebergTableSource {
 }
 
 impl TableSource for IcebergTableSource {
-    fn as_any(&self) -> &dyn Any {
-        &self.tabular
-    }
     fn schema(&self) -> SchemaRef {
         match &self.tabular {
             Tabular::Table(table) => {
