@@ -133,7 +133,11 @@ impl PruningStatistics for PruneManifests<'_, '_> {
 
     fn row_counts(&self) -> Option<ArrayRef> {
         let row_counts = self.files.iter().map(|x| {
-            match (x.added_rows_count, x.existing_rows_count, x.deleted_rows_count) {
+            match (
+                x.added_rows_count,
+                x.existing_rows_count,
+                x.deleted_rows_count,
+            ) {
                 (Some(a), Some(e), Some(d)) => Some(a + e - d),
                 _ => None,
             }
