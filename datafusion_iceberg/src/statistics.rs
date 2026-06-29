@@ -127,7 +127,10 @@ fn convert_value_to_scalar_value(value: Value, field_type: &Type) -> Result<Scal
         Value::Date(d) => Ok(ScalarValue::Date32(Some(d))),
         Value::Time(t) => Ok(ScalarValue::Time64Microsecond(Some(t))),
         Value::Timestamp(ts) => Ok(ScalarValue::TimestampMicrosecond(Some(ts), None)),
-        Value::TimestampTZ(ts) => Ok(ScalarValue::TimestampMicrosecond(Some(ts), None)),
+        Value::TimestampTZ(ts) => Ok(ScalarValue::TimestampMicrosecond(
+            Some(ts),
+            Some("UTC".into()),
+        )),
         Value::String(s) => Ok(ScalarValue::Utf8(Some(s))),
         Value::UUID(u) => Ok(ScalarValue::FixedSizeBinary(
             16,

@@ -262,12 +262,15 @@ fn any_iter_to_array(
                 opt.and_then(|value| Some(*value.downcast::<i64>().ok()?)),
             )
         })),
-        DataType::Timestamp(_, _) => ScalarValue::iter_to_array(iter.map(|opt| {
-            ScalarValue::TimestampMicrosecond(
-                opt.and_then(|value| Some(*value.downcast::<i64>().ok()?)),
-                None,
-            )
-        })),
+        DataType::Timestamp(_, tz) => {
+            // Make sure to preserve the column's timezone for the sake of comparisons.
+            ScalarValue::iter_to_array(iter.map(move |opt| {
+                ScalarValue::TimestampMicrosecond(
+                    opt.and_then(|value| Some(*value.downcast::<i64>().ok()?)),
+                    tz.clone(),
+                )
+            }))
+        }
         DataType::Utf8 => ScalarValue::iter_to_array(iter.map(|opt| {
             ScalarValue::Utf8(opt.and_then(|value| Some(*value.downcast::<String>().ok()?)))
         })),
@@ -449,7 +452,12 @@ fn scalarvalue_to_value(scalar: &ScalarValue) -> Result<Value, Error> {
         ScalarValue::Time64Microsecond(x) => Ok(Value::Time(x.ok_or(Error::InvalidFormat(
             "Value can't be null when converting to iceberg value".to_owned(),
         ))?)),
-        ScalarValue::TimestampMicrosecond(x, _) => Ok(Value::Timestamp(x.ok_or(
+        ScalarValue::TimestampMicrosecond(x, Some(tz)) if tz == &Arc::from("UTC") => {
+            Ok(Value::TimestampTZ(x.ok_or(Error::InvalidFormat(
+                "Value can't be null when converting to iceberg value".to_owned(),
+            ))?))
+        }
+        ScalarValue::TimestampMicrosecond(x, None) => Ok(Value::Timestamp(x.ok_or(
             Error::InvalidFormat("Value can't be null when converting to iceberg value".to_owned()),
         )?)),
         x => Err(Error::NotSupported(format!(
@@ -466,6 +474,10 @@ fn value_to_scalarvalue(value: Value) -> Result<ScalarValue, Error> {
         Value::Date(x) => Ok(ScalarValue::Date32(Some(x))),
         Value::Time(x) => Ok(ScalarValue::Time64Microsecond(Some(x))),
         Value::Timestamp(x) => Ok(ScalarValue::TimestampMicrosecond(Some(x), None)),
+        Value::TimestampTZ(x) => Ok(ScalarValue::TimestampMicrosecond(
+            Some(x),
+            Some("UTC".into()),
+        )),
         x => Err(Error::NotSupported(format!(
             "Transforming {x} to iceberg value"
         ))),
@@ -473,8 +485,9 @@ fn value_to_scalarvalue(value: Value) -> Result<ScalarValue, Error> {
 }
 
 #[cfg(test)]
-mod date_transform_tests {
+mod tests {
     use super::*;
+    use datafusion::arrow::array::{Array, TimestampMicrosecondArray};
     use datafusion::arrow::datatypes::Field;
     use datafusion::common::config::ConfigOptions;
     use std::sync::Arc;
@@ -703,5 +716,31 @@ mod date_transform_tests {
         let result = transform_literal(input.clone(), &Transform::Identity)
             .expect("identity should pass through");
         assert_eq!(result, input);
+    }
+
+    #[test]
+    fn any_iter_to_array_preserves_timezone() {
+        for val in [Value::Timestamp(TS_MICROS), Value::TimestampTZ(TS_MICROS)] {
+            let iter = vec![Some(val.into_any()), None].into_iter();
+            let dt = DataType::Timestamp(TimeUnit::Microsecond, Some("UTC".into()));
+
+            let array = any_iter_to_array(iter, &dt).unwrap();
+
+            assert_eq!(array.data_type(), &dt);
+            let ts = array
+                .as_any()
+                .downcast_ref::<TimestampMicrosecondArray>()
+                .unwrap();
+            assert_eq!(ts.value(0), TS_MICROS);
+            assert!(ts.is_null(1));
+        }
+    }
+
+    #[test]
+    fn scalar_value_roundtrip_preserves_timezone() {
+        for val in [Value::Timestamp(TS_MICROS), Value::TimestampTZ(TS_MICROS)] {
+            let scalar = value_to_scalarvalue(val.clone()).unwrap();
+            assert_eq!(scalarvalue_to_value(&scalar).unwrap(), val);
+        }
     }
 }
