@@ -14,7 +14,7 @@ use iceberg_rust_spec::{
         partition::PartitionField,
         schema::Schema,
         types::Type,
-        values::{Struct, Value},
+        values::{PhysicalTypeHint, Struct, Value},
     },
     table_metadata::WRITE_METADATA_METRICS_DISTINCT_COUNTS_ENABLED,
 };
@@ -104,14 +104,26 @@ pub fn parquet_to_datafile(
                     .ok_or_else(|| Error::Schema(column_name.to_string(), "".to_string()))?
                     .field_type;
 
+                // Parquet's physical type can encode a logical type differently than
+                // the Iceberg spec: INT32/INT64 stats are native little-endian
+                // (Decimal's spec encoding is big-endian), and BYTE_ARRAY stats hold
+                // Uuid's UTF-8 string form (spec: 16-byte big-endian integer).
+                let physical_type_hint = match column.column_descr().physical_type() {
+                    parquet::basic::Type::INT32 | parquet::basic::Type::INT64 => {
+                        Some(PhysicalTypeHint::NativeLittleEndian)
+                    }
+                    parquet::basic::Type::BYTE_ARRAY => Some(PhysicalTypeHint::ByteArray),
+                    _ => None,
+                };
+
                 if let Some(distinct_counts) = distinct_counts.as_mut() {
                     if let (Some(distinct_count), Some(min_bytes), Some(max_bytes)) = (
                         statistics.distinct_count_opt(),
                         statistics.min_bytes_opt(),
                         statistics.max_bytes_opt(),
                     ) {
-                        let min = Value::try_from_bytes(min_bytes, data_type)?;
-                        let max = Value::try_from_bytes(max_bytes, data_type)?;
+                        let min = Value::try_from_bytes(min_bytes, data_type, physical_type_hint)?;
+                        let max = Value::try_from_bytes(max_bytes, data_type, physical_type_hint)?;
                         let current_min = lower_bounds.get(&id);
                         let current_max = upper_bounds.get(&id);
                         match (min, max, current_min, current_max) {
@@ -161,7 +173,7 @@ pub fn parquet_to_datafile(
 
                 if let Some(min_bytes) = statistics.min_bytes_opt() {
                     if let Type::Primitive(_) = &data_type {
-                        let new = Value::try_from_bytes(min_bytes, data_type)?;
+                        let new = Value::try_from_bytes(min_bytes, data_type, physical_type_hint)?;
                         match lower_bounds.entry(id) {
                             Entry::Occupied(mut entry) => {
                                 let entry = entry.get_mut();
@@ -217,7 +229,7 @@ pub fn parquet_to_datafile(
                 }
                 if let Some(max_bytes) = statistics.max_bytes_opt() {
                     if let Type::Primitive(_) = &data_type {
-                        let new = Value::try_from_bytes(max_bytes, data_type)?;
+                        let new = Value::try_from_bytes(max_bytes, data_type, physical_type_hint)?;
                         match upper_bounds.entry(id) {
                             Entry::Occupied(mut entry) => {
                                 let entry = entry.get_mut();
@@ -281,10 +293,18 @@ pub fn parquet_to_datafile(
                             if let (Some(min_bytes), Some(max_bytes)) =
                                 (statistics.min_bytes_opt(), statistics.max_bytes_opt())
                             {
-                                let min = Value::try_from_bytes(min_bytes, data_type)?
-                                    .transform(partition_field.transform())?;
-                                let max = Value::try_from_bytes(max_bytes, data_type)?
-                                    .transform(partition_field.transform())?;
+                                let min = Value::try_from_bytes(
+                                    min_bytes,
+                                    data_type,
+                                    physical_type_hint,
+                                )?
+                                .transform(partition_field.transform())?;
+                                let max = Value::try_from_bytes(
+                                    max_bytes,
+                                    data_type,
+                                    physical_type_hint,
+                                )?
+                                .transform(partition_field.transform())?;
                                 if min == max {
                                     *partition_value = Some(min)
                                 } else {

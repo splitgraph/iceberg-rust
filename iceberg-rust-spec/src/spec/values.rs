@@ -52,6 +52,18 @@ use super::{
 
 pub static YEARS_BEFORE_UNIX_EPOCH: i32 = 1970;
 
+/// How the bytes passed to [`Value::try_from_bytes`] are physically encoded,
+/// for callers whose byte source doesn't follow the Iceberg
+/// single-value-serialization spec. Deliberately independent of
+/// `parquet::basic::Type` (this crate has no `parquet` dependency).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PhysicalTypeHint {
+    /// Fixed-width, native little-endian (Parquet INT32/INT64).
+    NativeLittleEndian,
+    /// Variable-length, e.g. UTF-8 text (Parquet BYTE_ARRAY).
+    ByteArray,
+}
+
 /// Values present in iceberg type
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(untagged)]
@@ -441,6 +453,8 @@ impl Value {
     /// # Arguments
     /// * `bytes` - The raw byte slice to parse
     /// * `data_type` - The expected type of the value
+    /// * `physical_type_hint` - Provide additional information when parsing some
+    ///   data types (e.g. UUID or Decimal)
     ///
     /// # Returns
     /// * `Ok(Value)` - Successfully parsed value of the specified type
@@ -450,7 +464,11 @@ impl Value {
     /// Currently only supports primitive types. Complex types like structs, lists,
     /// and maps are not supported and will return an error.
     #[inline]
-    pub fn try_from_bytes(bytes: &[u8], data_type: &Type) -> Result<Self, Error> {
+    pub fn try_from_bytes(
+        bytes: &[u8],
+        data_type: &Type,
+        physical_type_hint: Option<PhysicalTypeHint>,
+    ) -> Result<Self, Error> {
         match data_type {
             Type::Primitive(primitive) => match primitive {
                 PrimitiveType::Boolean => {
@@ -477,14 +495,25 @@ impl Value {
                     Ok(Value::TimestampTZ(i64::from_le_bytes(bytes.try_into()?)))
                 }
                 PrimitiveType::String => Ok(Value::String(std::str::from_utf8(bytes)?.to_string())),
+                // ByteArray-hinted Uuid bytes are its UTF-8 string form, not a big-endian integer.
+                PrimitiveType::Uuid if physical_type_hint == Some(PhysicalTypeHint::ByteArray) => {
+                    Ok(Value::UUID(Uuid::parse_str(std::str::from_utf8(bytes)?)?))
+                }
                 PrimitiveType::Uuid => Ok(Value::UUID(Uuid::from_u128(u128::from_be_bytes(
                     bytes.try_into()?,
                 )))),
                 PrimitiveType::Fixed(len) => Ok(Value::Fixed(*len as usize, Vec::from(bytes))),
                 PrimitiveType::Binary => Ok(Value::Binary(Vec::from(bytes))),
                 PrimitiveType::Decimal { scale, .. } => {
+                    // NativeLittleEndian-hinted bytes need reversing before the
+                    // spec's big-endian two's-complement decode applies.
                     let val = if bytes.len() <= 16 {
-                        i128::from_be_bytes(sign_extend_be(bytes))
+                        if physical_type_hint == Some(PhysicalTypeHint::NativeLittleEndian) {
+                            let reversed: Vec<u8> = bytes.iter().rev().copied().collect();
+                            i128::from_be_bytes(sign_extend_be(&reversed))
+                        } else {
+                            i128::from_be_bytes(sign_extend_be(bytes))
+                        }
                     } else {
                         return Err(Error::Type("decimal".to_string(), "bytes".to_string()));
                     };
@@ -1093,7 +1122,7 @@ mod tests {
         let schema = apache_avro::Schema::parse_str(raw_schema).unwrap();
 
         let bytes = ByteBuf::from(input);
-        let literal = Value::try_from_bytes(&bytes, expected_type).unwrap();
+        let literal = Value::try_from_bytes(&bytes, expected_type, None).unwrap();
         assert_eq!(literal, expected_literal);
 
         let mut writer = apache_avro::Writer::new(&schema, Vec::new());
@@ -1103,7 +1132,7 @@ mod tests {
 
         for record in reader {
             let result = apache_avro::from_value::<ByteBuf>(&record.unwrap()).unwrap();
-            let desered_literal = Value::try_from_bytes(&result, expected_type).unwrap();
+            let desered_literal = Value::try_from_bytes(&result, expected_type, None).unwrap();
             assert_eq!(desered_literal, expected_literal);
         }
     }
@@ -1392,6 +1421,50 @@ mod tests {
                 scale: 2,
             }),
         );
+    }
+
+    #[test]
+    fn avro_bytes_uuid() {
+        let value = Value::UUID(Uuid::parse_str("f79c3e09-677c-4bbd-a479-3f349cb785e7").unwrap());
+
+        let byte_buf: ByteBuf = value.clone().into();
+        let bytes: Vec<u8> = byte_buf.into_vec();
+        assert_eq!(bytes.len(), 16);
+
+        check_avro_bytes_serde(bytes, value, &Type::Primitive(PrimitiveType::Uuid));
+    }
+
+    #[test]
+    fn decimal_native_little_endian_hint_round_trips() {
+        let decimal = Decimal::from_str_exact("104899.50").unwrap();
+        let value = Value::Decimal(decimal);
+        let bytes = (decimal.mantissa() as i64).to_le_bytes();
+
+        let decoded = Value::try_from_bytes(
+            &bytes,
+            &Type::Primitive(PrimitiveType::Decimal {
+                precision: 18,
+                scale: 2,
+            }),
+            Some(PhysicalTypeHint::NativeLittleEndian),
+        )
+        .unwrap();
+        assert_eq!(decoded, value);
+    }
+
+    #[test]
+    fn uuid_byte_array_hint_round_trips() {
+        let uuid = Uuid::parse_str("f79c3e09-677c-4bbd-a479-3f349cb785e7").unwrap();
+        let value = Value::UUID(uuid);
+
+        let bytes = uuid.to_string().into_bytes();
+        let decoded = Value::try_from_bytes(
+            &bytes,
+            &Type::Primitive(PrimitiveType::Uuid),
+            Some(PhysicalTypeHint::ByteArray),
+        )
+        .unwrap();
+        assert_eq!(decoded, value);
     }
 
     #[test]
