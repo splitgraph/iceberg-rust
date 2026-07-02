@@ -572,7 +572,7 @@ impl AvroMap<ByteBuf> {
             .into_iter()
             .filter_map(|(k, v)| {
                 let field = schema.get(k as usize)?;
-                Some(Value::try_from_bytes(&v, &field.field_type, None).map(|val| (k, val)))
+                Some(Value::try_from_bytes(&v, &field.field_type).map(|val| (k, val)))
             })
             .collect()
     }
