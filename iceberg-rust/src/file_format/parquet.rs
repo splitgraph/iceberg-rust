@@ -122,8 +122,8 @@ pub fn parquet_to_datafile(
                         statistics.min_bytes_opt(),
                         statistics.max_bytes_opt(),
                     ) {
-                        let min = Value::try_from_bytes(min_bytes, data_type, physical_type_hint)?;
-                        let max = Value::try_from_bytes(max_bytes, data_type, physical_type_hint)?;
+                        let min = Value::try_from_bytes_with_hint(min_bytes, data_type, physical_type_hint)?;
+                        let max = Value::try_from_bytes_with_hint(max_bytes, data_type, physical_type_hint)?;
                         let current_min = lower_bounds.get(&id);
                         let current_max = upper_bounds.get(&id);
                         match (min, max, current_min, current_max) {
@@ -173,7 +173,7 @@ pub fn parquet_to_datafile(
 
                 if let Some(min_bytes) = statistics.min_bytes_opt() {
                     if let Type::Primitive(_) = &data_type {
-                        let new = Value::try_from_bytes(min_bytes, data_type, physical_type_hint)?;
+                        let new = Value::try_from_bytes_with_hint(min_bytes, data_type, physical_type_hint)?;
                         match lower_bounds.entry(id) {
                             Entry::Occupied(mut entry) => {
                                 let entry = entry.get_mut();
@@ -229,7 +229,7 @@ pub fn parquet_to_datafile(
                 }
                 if let Some(max_bytes) = statistics.max_bytes_opt() {
                     if let Type::Primitive(_) = &data_type {
-                        let new = Value::try_from_bytes(max_bytes, data_type, physical_type_hint)?;
+                        let new = Value::try_from_bytes_with_hint(max_bytes, data_type, physical_type_hint)?;
                         match upper_bounds.entry(id) {
                             Entry::Occupied(mut entry) => {
                                 let entry = entry.get_mut();
@@ -293,13 +293,13 @@ pub fn parquet_to_datafile(
                             if let (Some(min_bytes), Some(max_bytes)) =
                                 (statistics.min_bytes_opt(), statistics.max_bytes_opt())
                             {
-                                let min = Value::try_from_bytes(
+                                let min = Value::try_from_bytes_with_hint(
                                     min_bytes,
                                     data_type,
                                     physical_type_hint,
                                 )?
                                 .transform(partition_field.transform())?;
-                                let max = Value::try_from_bytes(
+                                let max = Value::try_from_bytes_with_hint(
                                     max_bytes,
                                     data_type,
                                     physical_type_hint,
