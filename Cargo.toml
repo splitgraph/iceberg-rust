@@ -42,6 +42,7 @@ murmur3 = { version = "0.5.2" }
 parquet = { version = "58", features = ["async", "object_store"] }
 pin-project-lite = "0.2"
 regex = "1.11.1"
+rust_decimal = "1.42.0"
 serde = "^1.0"
 serde_derive = "^1.0"
 serde_json = "^1.0"
