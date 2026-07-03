@@ -448,13 +448,24 @@ impl Value {
         }
     }
 
-    /// Attempts to create a Value from raw bytes according to a specified type
+    /// Attempts to create a Value from raw bytes according to a specified type.
+    ///
+    /// Assumes Iceberg single-value-serialization encoding. For bytes that
+    /// originate from a different physical encoding (e.g. Parquet statistics),
+    /// use [`Value::try_from_bytes_with_hint`] instead.
+    #[inline]
+    pub fn try_from_bytes(bytes: &[u8], data_type: &Type) -> Result<Self, Error> {
+        Self::try_from_bytes_with_hint(bytes, data_type, None)
+    }
+
+    /// Like [`Value::try_from_bytes`] but accepts an optional [`PhysicalTypeHint`]
+    /// for bytes that don't follow the Iceberg single-value-serialization spec.
     ///
     /// # Arguments
     /// * `bytes` - The raw byte slice to parse
     /// * `data_type` - The expected type of the value
-    /// * `physical_type_hint` - Provide additional information when parsing some
-    ///   data types (e.g. UUID or Decimal)
+    /// * `physical_type_hint` - Encoding hint for UUID or Decimal bytes that
+    ///   deviate from the Iceberg spec (e.g. Parquet INT32/INT64 or BYTE_ARRAY)
     ///
     /// # Returns
     /// * `Ok(Value)` - Successfully parsed value of the specified type
@@ -464,7 +475,7 @@ impl Value {
     /// Currently only supports primitive types. Complex types like structs, lists,
     /// and maps are not supported and will return an error.
     #[inline]
-    pub fn try_from_bytes(
+    pub fn try_from_bytes_with_hint(
         bytes: &[u8],
         data_type: &Type,
         physical_type_hint: Option<PhysicalTypeHint>,
@@ -1122,7 +1133,7 @@ mod tests {
         let schema = apache_avro::Schema::parse_str(raw_schema).unwrap();
 
         let bytes = ByteBuf::from(input);
-        let literal = Value::try_from_bytes(&bytes, expected_type, None).unwrap();
+        let literal = Value::try_from_bytes(&bytes, expected_type).unwrap();
         assert_eq!(literal, expected_literal);
 
         let mut writer = apache_avro::Writer::new(&schema, Vec::new());
@@ -1132,7 +1143,7 @@ mod tests {
 
         for record in reader {
             let result = apache_avro::from_value::<ByteBuf>(&record.unwrap()).unwrap();
-            let desered_literal = Value::try_from_bytes(&result, expected_type, None).unwrap();
+            let desered_literal = Value::try_from_bytes(&result, expected_type).unwrap();
             assert_eq!(desered_literal, expected_literal);
         }
     }
@@ -1440,7 +1451,7 @@ mod tests {
         let value = Value::Decimal(decimal);
         let bytes = (decimal.mantissa() as i64).to_le_bytes();
 
-        let decoded = Value::try_from_bytes(
+        let decoded = Value::try_from_bytes_with_hint(
             &bytes,
             &Type::Primitive(PrimitiveType::Decimal {
                 precision: 18,
@@ -1458,7 +1469,7 @@ mod tests {
         let value = Value::UUID(uuid);
 
         let bytes = uuid.to_string().into_bytes();
-        let decoded = Value::try_from_bytes(
+        let decoded = Value::try_from_bytes_with_hint(
             &bytes,
             &Type::Primitive(PrimitiveType::Uuid),
             Some(PhysicalTypeHint::ByteArray),

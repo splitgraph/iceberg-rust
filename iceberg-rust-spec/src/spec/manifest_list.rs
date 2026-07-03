@@ -481,11 +481,11 @@ impl FieldSummary {
             contains_nan: value.contains_nan,
             lower_bound: value
                 .lower_bound
-                .map(|x| Value::try_from_bytes(&x, data_type, None))
+                .map(|x| Value::try_from_bytes(&x, data_type))
                 .transpose()?,
             upper_bound: value
                 .upper_bound
-                .map(|x| Value::try_from_bytes(&x, data_type, None))
+                .map(|x| Value::try_from_bytes(&x, data_type))
                 .transpose()?,
         })
     }
