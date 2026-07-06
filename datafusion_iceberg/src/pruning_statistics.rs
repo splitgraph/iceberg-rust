@@ -44,6 +44,7 @@ use iceberg_rust::{
     },
     table::ManifestPath,
 };
+use rust_decimal::Decimal;
 
 pub(crate) struct PruneManifests<'table, 'manifests> {
     partition_fields: &'table [BoundPartitionField<'table>],
@@ -254,6 +255,9 @@ fn any_iter_to_array(
         DataType::Float64 => ScalarValue::iter_to_array(iter.map(|opt| {
             ScalarValue::Float64(opt.and_then(|value| Some(*value.downcast::<f64>().ok()?)))
         })),
+        DataType::Date32 => ScalarValue::iter_to_array(iter.map(|opt| {
+            ScalarValue::Date32(opt.and_then(|value| Some(*value.downcast::<i32>().ok()?)))
+        })),
         DataType::Date64 => ScalarValue::iter_to_array(iter.map(|opt| {
             ScalarValue::Date64(opt.and_then(|value| Some(*value.downcast::<i64>().ok()?)))
         })),
@@ -280,6 +284,20 @@ fn any_iter_to_array(
         DataType::Binary => ScalarValue::iter_to_array(iter.map(|opt| {
             ScalarValue::Binary(opt.and_then(|value| Some(*value.downcast::<Vec<u8>>().ok()?)))
         })),
+        // Only prune when the stored scale matches the column's scale.
+        DataType::Decimal128(precision, scale) => {
+            let (precision, scale) = (*precision, *scale);
+            ScalarValue::iter_to_array(iter.map(move |opt| {
+                ScalarValue::Decimal128(
+                    opt.and_then(|value| {
+                        let d = *value.downcast::<Decimal>().ok()?;
+                        (d.scale() == scale as u32).then(|| d.mantissa())
+                    }),
+                    precision,
+                    scale,
+                )
+            }))
+        }
         _ => Err(DataFusionError::Internal(
             "Arrow datatype not supported for pruning.".to_string(),
         )),
@@ -487,9 +505,12 @@ fn value_to_scalarvalue(value: Value) -> Result<ScalarValue, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use datafusion::arrow::array::{Array, TimestampMicrosecondArray};
+    use datafusion::arrow::array::{
+        Array, Date32Array, Decimal128Array, TimestampMicrosecondArray,
+    };
     use datafusion::arrow::datatypes::Field;
     use datafusion::common::config::ConfigOptions;
+    use rust_decimal::Decimal;
     use std::sync::Arc;
 
     /// Helper: invoke `DateTransform` directly with a transform name and scalar value.
@@ -716,6 +737,39 @@ mod tests {
         let result = transform_literal(input.clone(), &Transform::Identity)
             .expect("identity should pass through");
         assert_eq!(result, input);
+    }
+
+    #[test]
+    fn any_iter_to_array_date32() {
+        let iter = vec![Some(Value::Date(19797).into_any()), None].into_iter();
+        let array = any_iter_to_array(iter, &DataType::Date32).unwrap();
+        let dates = array.as_any().downcast_ref::<Date32Array>().unwrap();
+        assert_eq!(dates.value(0), 19797);
+        assert!(dates.is_null(1));
+    }
+
+    #[test]
+    fn any_iter_to_array_decimal128() {
+        let iter = vec![
+            Some(Value::Decimal(Decimal::new(12345, 2)).into_any()),
+            None,
+        ]
+        .into_iter();
+        let array = any_iter_to_array(iter, &DataType::Decimal128(10, 2)).unwrap();
+        let dec = array.as_any().downcast_ref::<Decimal128Array>().unwrap();
+        assert_eq!(dec.value(0), 12345);
+        assert!(dec.is_null(1));
+        assert_eq!(dec.precision(), 10);
+        assert_eq!(dec.scale(), 2);
+    }
+
+    #[test]
+    fn any_iter_to_array_decimal128_scale_mismatch_is_null() {
+        // Stored scale (2) != column scale (4): emit null rather than misread the mantissa.
+        let iter = std::iter::once(Some(Value::Decimal(Decimal::new(12345, 2)).into_any()));
+        let array = any_iter_to_array(iter, &DataType::Decimal128(10, 4)).unwrap();
+        let dec = array.as_any().downcast_ref::<Decimal128Array>().unwrap();
+        assert!(dec.is_null(0));
     }
 
     #[test]
