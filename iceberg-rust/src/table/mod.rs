@@ -12,7 +12,6 @@
 
 use std::{io::Cursor, sync::Arc};
 
-use futures::future::try_join_all;
 use itertools::Itertools;
 use manifest::ManifestReader;
 use manifest_list::read_snapshot;
@@ -328,11 +327,12 @@ async fn datafiles(
     };
 
     let futures: Vec<_> = iter
-        .map(move |file| {
+        .map(|file| {
             let object_store = object_store.clone();
+            let manifest_path = file.manifest_path.clone();
+            let manifest_sequence_number = file.sequence_number;
             async move {
-                let manifest_path = &file.manifest_path;
-                let path: Path = util::strip_prefix(manifest_path).into();
+                let path: Path = util::strip_prefix(&manifest_path).into();
                 let bytes = Cursor::new(Vec::from(
                     object_store
                         .get(&path)
@@ -340,43 +340,38 @@ async fn datafiles(
                         .instrument(tracing::trace_span!("iceberg_rust::get_manifest"))
                         .await?,
                 ));
-                Ok::<_, Error>((bytes, manifest_path, file.sequence_number))
+
+                ManifestReader::new(bytes)?
+                    .filter_map_ok(|mut x| {
+                        let sequence_number = if let Some(sequence_number) = x.sequence_number() {
+                            *sequence_number
+                        } else {
+                            *x.sequence_number_mut() = Some(manifest_sequence_number);
+                            manifest_sequence_number
+                        };
+
+                        let keep = match sequence_number_range {
+                            (Some(start), Some(end)) => {
+                                start < sequence_number && sequence_number <= end
+                            }
+                            (Some(start), None) => start < sequence_number,
+                            (None, Some(end)) => sequence_number <= end,
+                            _ => true,
+                        };
+                        keep.then(|| (manifest_path.clone(), x))
+                    })
+                    .collect::<Result<Vec<_>, Error>>()
             }
         })
         .collect();
 
-    let results = try_join_all(futures).await?;
+    // Bounded concurrency caps in-flight object-store requests and peak decode memory.
+    let entries: Vec<(ManifestPath, ManifestEntry)> = stream::iter(futures)
+        .buffered(crate::config::concurrent_manifest_ops())
+        .try_concat()
+        .await?;
 
-    Ok(results.into_iter().flat_map(move |result| {
-        let (bytes, path, sequence_number) = result;
-
-        let reader = ManifestReader::new(bytes).unwrap();
-        reader.filter_map(move |x| {
-            let mut x = match x {
-                Ok(entry) => entry,
-                Err(err) => return Some(Err(err)),
-            };
-
-            let sequence_number = if let Some(sequence_number) = x.sequence_number() {
-                *sequence_number
-            } else {
-                *x.sequence_number_mut() = Some(sequence_number);
-                sequence_number
-            };
-
-            let filter = match sequence_number_range {
-                (Some(start), Some(end)) => start < sequence_number && sequence_number <= end,
-                (Some(start), None) => start < sequence_number,
-                (None, Some(end)) => sequence_number <= end,
-                _ => true,
-            };
-            if filter {
-                Some(Ok((path.to_owned(), x)))
-            } else {
-                None
-            }
-        })
-    }))
+    Ok(entries.into_iter().map(Ok))
 }
 
 /// delete all datafiles, manifests and metadata files, does not remove table from catalog
@@ -394,9 +389,10 @@ pub(crate) async fn delete_all_table_files(
     let datafiles = datafiles(object_store.clone(), &manifests, None, (None, None)).await?;
     let snapshots = &metadata.snapshots;
 
-    // stream::iter(datafiles.into_iter())
+    let concurrency = crate::config::concurrent_manifest_ops();
+
     stream::iter(datafiles)
-        .try_for_each_concurrent(None, |datafile| {
+        .try_for_each_concurrent(concurrency, |datafile| {
             let object_store = object_store.clone();
             async move {
                 object_store
@@ -409,7 +405,7 @@ pub(crate) async fn delete_all_table_files(
 
     stream::iter(manifests)
         .map(Ok::<_, Error>)
-        .try_for_each_concurrent(None, |manifest| {
+        .try_for_each_concurrent(concurrency, |manifest| {
             let object_store = object_store.clone();
             async move {
                 object_store.delete(&manifest.manifest_path.into()).await?;
@@ -420,7 +416,7 @@ pub(crate) async fn delete_all_table_files(
 
     stream::iter(snapshots.values())
         .map(Ok::<_, Error>)
-        .try_for_each_concurrent(None, |snapshot| {
+        .try_for_each_concurrent(concurrency, |snapshot| {
             let object_store = object_store.clone();
             async move {
                 object_store
