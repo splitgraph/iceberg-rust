@@ -188,12 +188,15 @@ async fn test_table_transaction_overwrite() {
 
     for manifest_entry in final_manifest_entries {
         let manifest_entries = vec![manifest_entry];
-        let mut data_files = table
+        let data_files = table
             .datafiles(&manifest_entries, None, (None, None))
             .await
-            .expect("Failed to read data files");
+            .expect("Failed to read data files")
+            .collect::<Vec<_>>()
+            .await;
 
         data_files
+            .into_iter()
             .try_for_each(|result| {
                 let (_, entry) = result?;
                 total_data_files += 1;
@@ -241,12 +244,15 @@ async fn test_table_transaction_overwrite() {
     let mut all_manifest_entries = Vec::new();
     for manifest_entry in final_manifest_entries_for_read {
         let manifest_entries = vec![manifest_entry];
-        let mut data_files = table
+        let data_files = table
             .datafiles(&manifest_entries, None, (None, None))
             .await
-            .expect("Failed to read data files for verification");
+            .expect("Failed to read data files for verification")
+            .collect::<Vec<_>>()
+            .await;
 
         data_files
+            .into_iter()
             .try_for_each(|result| {
                 all_manifest_entries.push(result?.1);
                 Ok::<_, Error>(())
@@ -430,14 +436,16 @@ async fn create_files_to_overwrite_for_partition(
 
         // Read the data files from this manifest
         let manifest_entries = vec![manifest_entry];
-        let mut data_files = table
+        let data_files = table
             .datafiles(&manifest_entries, None, (None, None))
-            .await?;
+            .await?
+            .collect::<Vec<_>>()
+            .await;
 
         let mut files_to_overwrite_in_manifest = Vec::new();
 
         // Find files that match the target partition
-        data_files.try_for_each(|result| {
+        data_files.into_iter().try_for_each(|result| {
             let (_, manifest_entry) = result?;
             // Check if this file belongs to the target partition
             let should_overwrite = manifest_entry

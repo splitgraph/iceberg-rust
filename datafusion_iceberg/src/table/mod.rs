@@ -574,6 +574,7 @@ async fn table_scan(
                 .await
                 .map_err(DataFusionIcebergError::from)?
                 .try_collect()
+                .await
                 .map_err(DataFusionIcebergError::from)?
         } else {
             table
@@ -581,6 +582,7 @@ async fn table_scan(
                 .await
                 .map_err(DataFusionIcebergError::from)?
                 .try_collect()
+                .await
                 .map_err(DataFusionIcebergError::from)?
         };
 
@@ -617,6 +619,7 @@ async fn table_scan(
             .await
             .map_err(DataFusionIcebergError::from)?
             .try_collect()
+            .await
             .map_err(DataFusionIcebergError::from)?;
 
         let mut statistics = statistics_from_datafiles(&schema, &data_files);
