@@ -18,7 +18,7 @@ use manifest_list::read_snapshot;
 use object_store::ObjectStoreExt;
 use object_store::{path::Path, ObjectStore};
 
-use futures::{stream, StreamExt, TryFutureExt, TryStreamExt};
+use futures::{stream, Stream, StreamExt, TryFutureExt, TryStreamExt};
 use iceberg_rust_spec::util::{self};
 use iceberg_rust_spec::{
     spec::{
@@ -262,8 +262,7 @@ impl Table {
         manifests: &'a [ManifestListEntry],
         filter: Option<Vec<bool>>,
         sequence_number_range: (Option<i64>, Option<i64>),
-    ) -> Result<impl Iterator<Item = Result<(ManifestPath, ManifestEntry), Error>> + 'a, Error>
-    {
+    ) -> Result<impl Stream<Item = Result<(ManifestPath, ManifestEntry), Error>> + 'a, Error> {
         datafiles(
             self.object_store(),
             manifests,
@@ -280,7 +279,7 @@ impl Table {
     ) -> Result<bool, Error> {
         let manifests = self.manifests(start, end).await?;
         let datafiles = self.datafiles(&manifests, None, (None, None)).await?;
-        stream::iter(datafiles)
+        datafiles
             .try_any(|entry| async move { !matches!(entry.1.data_file().content(), Content::Data) })
             .await
     }
@@ -312,7 +311,7 @@ async fn datafiles(
     manifests: &'_ [ManifestListEntry],
     filter: Option<Vec<bool>>,
     sequence_number_range: (Option<i64>, Option<i64>),
-) -> Result<impl Iterator<Item = Result<(ManifestPath, ManifestEntry), Error>> + '_, Error> {
+) -> Result<impl Stream<Item = Result<(ManifestPath, ManifestEntry), Error>> + '_, Error> {
     // filter manifest files according to filter vector
     let iter: Box<dyn Iterator<Item = &ManifestListEntry> + Send + Sync> = match filter {
         Some(predicate) => {
@@ -365,13 +364,13 @@ async fn datafiles(
         })
         .collect();
 
-    // Bounded concurrency caps in-flight object-store requests and peak decode memory.
-    let entries: Vec<(ManifestPath, ManifestEntry)> = stream::iter(futures)
+    // `buffered` keeps at most `concurrent_manifest_ops` fetch+decode futures in flight, bounding
+    // request fan-out and the raw manifest bytes held at once (each future drops its bytes once
+    // decoded).
+    Ok(stream::iter(futures)
         .buffered(crate::config::concurrent_manifest_ops())
-        .try_concat()
-        .await?;
-
-    Ok(entries.into_iter().map(Ok))
+        .map_ok(|entries| stream::iter(entries.into_iter().map(Ok::<_, Error>)))
+        .try_flatten())
 }
 
 /// delete all datafiles, manifests and metadata files, does not remove table from catalog
@@ -391,7 +390,7 @@ pub(crate) async fn delete_all_table_files(
 
     let concurrency = crate::config::concurrent_manifest_ops();
 
-    stream::iter(datafiles)
+    datafiles
         .try_for_each_concurrent(concurrency, |datafile| {
             let object_store = object_store.clone();
             async move {
