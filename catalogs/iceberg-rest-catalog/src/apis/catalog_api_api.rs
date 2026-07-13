@@ -780,22 +780,22 @@ pub async fn load_namespace_metadata(
     fetch::fetch(configuration, method, prefix, &uri_str, &(), None, None).await
 }
 
-/// Load a table from the catalog.  The response contains both configuration and table metadata. The configuration, if non-empty is used as additional configuration for the table that overrides catalog configuration. For example, this configuration may change the FileIO implementation to be used for the table.  The response also contains the table's full metadata, matching the table metadata JSON file.  The catalog configuration may contain credentials that should be used for subsequent requests for the table. The configuration key \"token\" is used to pass an access token to be used as a bearer token for table requests. Otherwise, a token may be passed using a RFC 8693 token type as a configuration key. For example, \"urn:ietf:params:oauth:token-type:jwt=<JWT-token>\".
-pub async fn load_table(
+/// Load a table from the catalog. The response contains the table's full metadata plus any extra
+/// configuration to apply to it, which may include credentials to use for subsequent requests.
+///
+/// The headers argument can control how the Iceberg catalog handles credentials (via
+/// `X-Iceberg-Access-Delegation`) and whether to use HTTP cache semantics (via `If-None-Match`).
+pub async fn load_table<T>(
     configuration: &configuration::Configuration,
     prefix: Option<&str>,
     namespace: &str,
     table: &str,
-    x_iceberg_access_delegation: Option<&str>,
+    headers: HashMap<String, String>,
     snapshots: Option<&str>,
-) -> Result<models::LoadTableResult, Error<LoadTableError>> {
-    let mut headers = HashMap::new();
-    if let Some(param_value) = x_iceberg_access_delegation {
-        headers.insert(
-            "X-Iceberg-Access-Delegation".to_owned(),
-            param_value.to_string(),
-        );
-    }
+) -> Result<T, Error<LoadTableError>>
+where
+    T: super::FromResponse<LoadTableError>,
+{
     let mut query_params = HashMap::new();
     if let Some(snapshots) = snapshots {
         query_params.insert("snapshots".to_owned(), snapshots.to_string());
@@ -806,11 +806,10 @@ pub async fn load_table(
         namespace = crate::apis::urlencode(namespace),
         table = crate::apis::urlencode(table)
     );
-    let method = reqwest::Method::GET;
 
     fetch::fetch(
         configuration,
-        method,
+        reqwest::Method::GET,
         prefix,
         &uri_str,
         &(),

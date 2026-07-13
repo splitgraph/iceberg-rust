@@ -343,12 +343,17 @@ impl Catalog for RestCatalog {
             )),
             Err(apis::Error::ResponseError(content)) => {
                 if content.status == 404 {
+                    let headers = HashMap::from([(
+                        "X-Iceberg-Access-Delegation".to_owned(),
+                        "vended-credentials".to_owned(),
+                    )]);
+
                     let response = catalog_api_api::load_table(
                         &configuration,
                         self.name.as_deref(),
                         &identifier.namespace().to_string(),
                         identifier.name(),
-                        Some("vended-credentials"),
+                        headers,
                         None,
                     )
                     .await

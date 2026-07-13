@@ -10,6 +10,15 @@ pub struct ResponseContent<T> {
     pub entity: Option<T>,
 }
 
+/// Outcome of a conditional (ETag-validated) request.
+#[derive(Debug)]
+pub enum Conditional<T> {
+    /// Server returned `304 Not Modified`; the caller's cached value is still current.
+    NotModified,
+    /// Server returned a fresh body, along with its `ETag` if one was present.
+    Modified { value: T, etag: Option<String> },
+}
+
 #[derive(Debug)]
 pub enum Error<T> {
     Reqwest(reqwest::Error),
@@ -104,5 +113,7 @@ pub mod catalog_api_api;
 pub mod configuration_api_api;
 pub(crate) mod fetch;
 pub mod o_auth2_api_api;
+
+pub use fetch::FromResponse;
 
 pub mod configuration;
