@@ -783,9 +783,44 @@ pub async fn load_namespace_metadata(
 /// Load a table from the catalog. The response contains the table's full metadata plus any extra
 /// configuration to apply to it, which may include credentials to use for subsequent requests.
 ///
-/// The headers argument can control how the Iceberg catalog handles credentials (via
-/// `X-Iceberg-Access-Delegation`) and whether to use HTTP cache semantics (via `If-None-Match`).
+/// The headers argument can control how the Iceberg catalog handles credentials via
+/// `X-Iceberg-Access-Delegation`. For HTTP cache semantics use [`load_table_conditional`].
 pub async fn load_table(
+    configuration: &configuration::Configuration,
+    prefix: Option<&str>,
+    namespace: &str,
+    table: &str,
+    headers: HashMap<String, String>,
+    snapshots: Option<&str>,
+) -> Result<models::LoadTableResult, Error<LoadTableError>> {
+    let mut query_params = HashMap::new();
+    if let Some(snapshots) = snapshots {
+        query_params.insert("snapshots".to_owned(), snapshots.to_string());
+    }
+
+    let uri_str = format!(
+        "namespaces/{namespace}/tables/{table}",
+        namespace = crate::apis::urlencode(namespace),
+        table = crate::apis::urlencode(table)
+    );
+
+    fetch::fetch(
+        configuration,
+        reqwest::Method::GET,
+        prefix,
+        &uri_str,
+        &(),
+        Some(headers),
+        Some(query_params),
+    )
+    .await
+}
+
+/// Load a table from the catalog with HTTP cache semantics. Pass an `If-None-Match` header with
+/// a previously received ETag to skip re-fetching unchanged metadata; the server returns
+/// `304 Not Modified` in that case and this function returns [`super::Conditional::NotModified`].
+/// Use [`load_table`] when caching is not needed.
+pub async fn load_table_conditional(
     configuration: &configuration::Configuration,
     prefix: Option<&str>,
     namespace: &str,

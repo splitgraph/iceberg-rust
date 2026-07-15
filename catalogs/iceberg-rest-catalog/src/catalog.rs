@@ -359,10 +359,6 @@ impl Catalog for RestCatalog {
                     .await
                     .map_err(|_| Error::CatalogNotFound)?;
 
-                    let apis::Conditional::Modified { value: response, .. } = response else {
-                        return Err(Error::CatalogNotFound);
-                    };
-
                     let object_store = self.get_object_store(&response)?;
 
                     self.cache
