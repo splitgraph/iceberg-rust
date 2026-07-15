@@ -15,8 +15,11 @@ pub struct ResponseContent<T> {
 pub enum Conditional<T> {
     /// Server returned `304 Not Modified`; the caller's cached value is still current.
     NotModified,
-    /// Server returned a fresh body, along with its `ETag` if one was present.
-    Modified { value: T, etag: Option<String> },
+    /// Server returned a fresh body along with all HTTP response headers.
+    Modified {
+        value: T,
+        headers: reqwest::header::HeaderMap,
+    },
 }
 
 #[derive(Debug)]
@@ -114,6 +117,5 @@ pub mod configuration_api_api;
 pub(crate) mod fetch;
 pub mod o_auth2_api_api;
 
-pub use fetch::FromResponse;
 
 pub mod configuration;
