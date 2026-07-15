@@ -444,7 +444,7 @@ pub async fn commit_transaction(
     let uri_str = "transactions/commit".to_string();
     let method = reqwest::Method::POST;
 
-    fetch::fetch_empty(
+    fetch::fetch(
         configuration,
         method,
         prefix,
@@ -548,7 +548,7 @@ pub async fn drop_namespace(
 
     let method = reqwest::Method::DELETE;
 
-    fetch::fetch_empty(configuration, method, prefix, &uri_str, &(), None, None).await
+    fetch::fetch(configuration, method, prefix, &uri_str, &(), None, None).await
 }
 
 /// Remove a table from the catalog
@@ -571,7 +571,7 @@ pub async fn drop_table(
     );
     let method = reqwest::Method::DELETE;
 
-    fetch::fetch_empty(
+    fetch::fetch(
         configuration,
         method,
         prefix,
@@ -597,7 +597,7 @@ pub async fn drop_view(
     );
     let method = reqwest::Method::DELETE;
 
-    fetch::fetch_empty(configuration, method, prefix, &uri_str, &(), None, None).await
+    fetch::fetch(configuration, method, prefix, &uri_str, &(), None, None).await
 }
 
 /// List all namespaces at a certain level, optionally starting from a given parent namespace. If table accounting.tax.paid.info exists, using 'SELECT NAMESPACE IN accounting' would translate into `GET /namespaces?parent=accounting` and must return a namespace, [\"accounting\", \"tax\"] only. Using 'SELECT NAMESPACE IN accounting.tax' would translate into `GET /namespaces?parent=accounting%1Ftax` and must return a namespace, [\"accounting\", \"tax\", \"paid\"]. If `parent` is not provided, all top-level namespaces should be listed.
@@ -780,22 +780,19 @@ pub async fn load_namespace_metadata(
     fetch::fetch(configuration, method, prefix, &uri_str, &(), None, None).await
 }
 
-/// Load a table from the catalog.  The response contains both configuration and table metadata. The configuration, if non-empty is used as additional configuration for the table that overrides catalog configuration. For example, this configuration may change the FileIO implementation to be used for the table.  The response also contains the table's full metadata, matching the table metadata JSON file.  The catalog configuration may contain credentials that should be used for subsequent requests for the table. The configuration key \"token\" is used to pass an access token to be used as a bearer token for table requests. Otherwise, a token may be passed using a RFC 8693 token type as a configuration key. For example, \"urn:ietf:params:oauth:token-type:jwt=<JWT-token>\".
+/// Load a table from the catalog. The response contains the table's full metadata plus any extra
+/// configuration to apply to it, which may include credentials to use for subsequent requests.
+///
+/// The headers argument can control how the Iceberg catalog handles credentials via
+/// `X-Iceberg-Access-Delegation`. For HTTP cache semantics use [`load_table_conditional`].
 pub async fn load_table(
     configuration: &configuration::Configuration,
     prefix: Option<&str>,
     namespace: &str,
     table: &str,
-    x_iceberg_access_delegation: Option<&str>,
+    headers: HashMap<String, String>,
     snapshots: Option<&str>,
 ) -> Result<models::LoadTableResult, Error<LoadTableError>> {
-    let mut headers = HashMap::new();
-    if let Some(param_value) = x_iceberg_access_delegation {
-        headers.insert(
-            "X-Iceberg-Access-Delegation".to_owned(),
-            param_value.to_string(),
-        );
-    }
     let mut query_params = HashMap::new();
     if let Some(snapshots) = snapshots {
         query_params.insert("snapshots".to_owned(), snapshots.to_string());
@@ -806,11 +803,45 @@ pub async fn load_table(
         namespace = crate::apis::urlencode(namespace),
         table = crate::apis::urlencode(table)
     );
-    let method = reqwest::Method::GET;
 
     fetch::fetch(
         configuration,
-        method,
+        reqwest::Method::GET,
+        prefix,
+        &uri_str,
+        &(),
+        Some(headers),
+        Some(query_params),
+    )
+    .await
+}
+
+/// Load a table from the catalog with HTTP cache semantics. Pass an `If-None-Match` header with
+/// a previously received ETag to skip re-fetching unchanged metadata; the server returns
+/// `304 Not Modified` in that case and this function returns [`super::Conditional::NotModified`].
+/// Use [`load_table`] when caching is not needed.
+pub async fn load_table_conditional(
+    configuration: &configuration::Configuration,
+    prefix: Option<&str>,
+    namespace: &str,
+    table: &str,
+    headers: HashMap<String, String>,
+    snapshots: Option<&str>,
+) -> Result<super::Conditional<models::LoadTableResult>, Error<LoadTableError>> {
+    let mut query_params = HashMap::new();
+    if let Some(snapshots) = snapshots {
+        query_params.insert("snapshots".to_owned(), snapshots.to_string());
+    }
+
+    let uri_str = format!(
+        "namespaces/{namespace}/tables/{table}",
+        namespace = crate::apis::urlencode(namespace),
+        table = crate::apis::urlencode(table)
+    );
+
+    fetch::fetch_conditional(
+        configuration,
+        reqwest::Method::GET,
         prefix,
         &uri_str,
         &(),
@@ -850,7 +881,7 @@ pub async fn namespace_exists(
 
     let method = reqwest::Method::HEAD;
 
-    fetch::fetch_empty(configuration, method, prefix, &uri_str, &(), None, None).await
+    fetch::fetch(configuration, method, prefix, &uri_str, &(), None, None).await
 }
 
 /// Register a table using given metadata file location.
@@ -888,7 +919,7 @@ pub async fn rename_table(
     let uri_str = "tables/rename".to_string();
     let method = reqwest::Method::POST;
 
-    fetch::fetch_empty(
+    fetch::fetch(
         configuration,
         method,
         prefix,
@@ -909,7 +940,7 @@ pub async fn rename_view(
     let uri_str = "views/rename".to_string();
     let method = reqwest::Method::POST;
 
-    fetch::fetch_empty(
+    fetch::fetch(
         configuration,
         method,
         prefix,
@@ -962,7 +993,7 @@ pub async fn report_metrics(
     );
     let method = reqwest::Method::POST;
 
-    fetch::fetch_empty(
+    fetch::fetch(
         configuration,
         method,
         prefix,
@@ -989,7 +1020,7 @@ pub async fn table_exists(
 
     let method = reqwest::Method::HEAD;
 
-    fetch::fetch_empty(configuration, method, prefix, &uri_str, &(), None, None).await
+    fetch::fetch(configuration, method, prefix, &uri_str, &(), None, None).await
 }
 
 /// Set and/or remove properties on a namespace. The request body specifies a list of properties to remove and a map of key value pairs to update. Properties that are not in the request are not modified or removed by this call. Server implementations are not required to support namespace properties.
@@ -1059,5 +1090,5 @@ pub async fn view_exists(
 
     let method = reqwest::Method::HEAD;
 
-    fetch::fetch_empty(configuration, method, prefix, &uri_str, &(), None, None).await
+    fetch::fetch(configuration, method, prefix, &uri_str, &(), None, None).await
 }

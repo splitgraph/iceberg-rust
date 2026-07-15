@@ -10,6 +10,18 @@ pub struct ResponseContent<T> {
     pub entity: Option<T>,
 }
 
+/// Outcome of a conditional (ETag-validated) request.
+#[derive(Debug)]
+pub enum Conditional<T> {
+    /// Server returned `304 Not Modified`; the caller's cached value is still current.
+    NotModified,
+    /// Server returned a fresh body along with all HTTP response headers.
+    Modified {
+        value: T,
+        headers: reqwest::header::HeaderMap,
+    },
+}
+
 #[derive(Debug)]
 pub enum Error<T> {
     Reqwest(reqwest::Error),
