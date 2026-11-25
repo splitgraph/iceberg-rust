@@ -1475,6 +1475,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn appends_record_actual_manifest_lengths() {
+        for version in [FormatVersion::V2, FormatVersion::V3] {
+            let mut metadata = sample_metadata(&[], None, &[]);
+            metadata.format_version = version;
+            let store = Arc::new(InMemory::new());
+
+            let mut last_snapshot = None;
+            for i in 0..3 {
+                let op = Operation::Append {
+                    branch: None,
+                    data_files: vec![data_file(
+                        &format!("s3://tests/table/data/f{i}.parquet"),
+                        5,
+                    )],
+                    delete_files: Vec::new(),
+                    additional_summary: None,
+                };
+                let (_, updates) = op.execute(&metadata, store.clone()).await.unwrap();
+                last_snapshot = updates.iter().find_map(|u| match u {
+                    TableUpdate::AddSnapshot { snapshot } => Some(snapshot.clone()),
+                    _ => None,
+                });
+                crate::catalog::commit::apply_table_updates(&mut metadata, updates).unwrap();
+            }
+
+            let snapshot = last_snapshot.unwrap();
+            let list_bytes = store
+                .get(&strip_prefix(snapshot.manifest_list()).into())
+                .await
+                .unwrap()
+                .bytes()
+                .await
+                .unwrap();
+            let entries = ManifestListReader::new(&list_bytes[..], &metadata)
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            assert!(!entries.is_empty());
+            for entry in entries {
+                let actual = store
+                    .head(&strip_prefix(&entry.manifest_path).into())
+                    .await
+                    .unwrap()
+                    .size as i64;
+                assert_eq!(
+                    entry.manifest_length, actual,
+                    "manifest {} ({version:?}): recorded vs actual length",
+                    entry.manifest_path
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn v3_appends_assign_contiguous_row_ranges() {
         let mut metadata = sample_metadata(&[], None, &[]);
         metadata.format_version = FormatVersion::V3;
